@@ -129,18 +129,18 @@ def cmd_init(args):
         prompt_dest.write_text(prompt_source.read_text(encoding='utf-8'), encoding='utf-8')
         print(f"✓ Prompt file copied to {prompt_dest}")
 
-    # Generate .claude/commands/edit.md
+    # Generate .claude/commands/add.md
     commands_dir = Path(cwd) / ".claude" / "commands"
     commands_dir.mkdir(parents=True, exist_ok=True)
 
-    edit_cmd = commands_dir / "edit.md"
-    if not edit_cmd.exists():
-        edit_cmd.write_text(
+    add_cmd = commands_dir / "add.md"
+    if not add_cmd.exists():
+        add_cmd.write_text(
             "Read the file at path: $ARGUMENTS\n"
-            "Then wait for the user's edit instruction.\n"
+            "File is now in context. Wait for the user's instruction.\n"
             "Do not read any other files.\n"
         )
-        print(f"✓ Created /edit command: {edit_cmd}")
+        print(f"✓ Created /add command: {add_cmd}")
 
     # Backup existing settings if they exist
     settings_path = get_settings_path(scope, cwd)
