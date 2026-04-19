@@ -7,6 +7,7 @@ Python 3.8+, stdlib only, zero external dependencies.
 import argparse
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -194,6 +195,18 @@ def cmd_launch(args):
     except FileNotFoundError:
         print("Error: ccmin not initialized. Run 'ccmin --init' first.")
         sys.exit(1)
+
+    # Auto-create .claude/ dan copy prompt jika belum ada
+    cwd = os.getcwd()
+    claude_dir = Path(cwd) / ".claude"
+    claude_dir.mkdir(exist_ok=True)
+
+    local_settings = claude_dir / "settings.local.json"
+    if not local_settings.exists():
+        src_settings = TEMPLATES_DIR / "settings.min.json"
+        if src_settings.exists():
+            shutil.copy(src_settings, local_settings)
+            print(f"✓ Created minimal settings: {local_settings}")
 
     launch(config, full_mode=False)
 

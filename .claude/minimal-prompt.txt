@@ -29,7 +29,7 @@ Be extra concise. Lead with action. NO preamble. NO reasoning.
 - If you want to see a file mentioned in a document, you MUST ask for my permission first
 
 # Scope & Path Rules
-- Your root directory is: /root/tweakcc
+- Your root directory is: /root/claude-code-minimal
 - ONLY access files within this absolute path.
 
 

@@ -9,22 +9,37 @@ from pathlib import Path
 def build_command(config: dict, cwd: str) -> list[str]:
     """
     Build argv list untuk os.execvp.
-    Contoh: ["claude", "--bare", "--tools", "Read,Write,Edit,MultiEdit",
-             "--system-prompt-file", "/root/.ccmin/minimal-prompt.txt",
-             "--append-system-prompt", "Your working directory is: /root/myproject"]
+    Membaca allow list dari settings aktif (local/global).
     """
+    import json
+    from .config import get_settings_path
+
     launcher = config.get("launcher", "claude")
     prompt_file = config.get("prompt_file", "~/.ccmin/minimal-prompt.txt")
+    scope = config.get("scope", "local")
+    project_path = config.get("project_path", cwd)
 
     # Expand user path
     prompt_path = Path(prompt_file).expanduser()
     if not prompt_path.exists():
         print(f"Warning: Prompt file not found at {prompt_path}", file=sys.stderr)
 
+    # Baca allow list dari settings aktif
+    tools = "Read,Write,Edit,MultiEdit,Bash(git *)"  # fallback
+    settings_path = get_settings_path(scope, project_path)
+    if settings_path.exists():
+        try:
+            settings = json.loads(settings_path.read_text())
+            allow = settings.get("permissions", {}).get("allow", [])
+            if allow:
+                tools = ",".join(allow)
+        except json.JSONDecodeError:
+            pass
+
     command = [
         launcher,
         "--bare",
-        "--tools", "Read,Write,Edit,MultiEdit,Bash(git *)",
+        "--tools", tools,
         "--system-prompt-file", str(prompt_path),
         "--append-system-prompt", f"Your working directory is: {cwd}"
     ]
