@@ -14,7 +14,10 @@ def build_command(config: dict, cwd: str) -> list[str]:
     import json
     from .config import get_settings_path
 
-    launcher = config.get("launcher", "claude")
+    launcher_str = config.get("launcher", "claude")
+    launcher_parts = launcher_str.split()  # handle multi-word launchers like 'ccr code'
+    launcher = launcher_parts[0]
+    launcher_extra_args = launcher_parts[1:]
     prompt_file = config.get("prompt_file", "~/.ccmin/minimal-prompt.txt")
     scope = config.get("scope", "local")
     project_path = config.get("project_path", cwd)
@@ -38,6 +41,7 @@ def build_command(config: dict, cwd: str) -> list[str]:
 
     command = [
         launcher,
+        *launcher_extra_args,
         "--bare",
         "--add-dir", project_path,  # load .claude/commands/
         "--tools", tools,
@@ -57,13 +61,16 @@ def launch(config: dict, full_mode: bool = False) -> None:
     from .config import get_settings_path
     from .detector import detect_mode
 
-    launcher = config.get("launcher", "claude")
+    launcher_str = config.get("launcher", "claude")
+    launcher_parts = launcher_str.split()
+    launcher = launcher_parts[0]
+    launcher_extra_args = launcher_parts[1:]
     project_path = config.get("project_path", os.getcwd())
     cwd = os.getcwd()
 
     if full_mode:
         # Launch without any flags
-        cmd = [launcher]
+        cmd = [launcher, *launcher_extra_args]
     else:
         # Check if launching from wrong directory
         if cwd != project_path:
@@ -85,7 +92,6 @@ def launch(config: dict, full_mode: bool = False) -> None:
                 import json
                 settings = json.loads(settings_path.read_text())
                 mode = detect_mode(settings)
-                print(f"[{mode.upper()}] {launcher}", file=sys.stderr)
             except (json.JSONDecodeError, ValueError):
                 pass  # Ignore mode detection errors during launch
 
@@ -93,6 +99,6 @@ def launch(config: dict, full_mode: bool = False) -> None:
     try:
         os.execvp(cmd[0], cmd)
     except FileNotFoundError:
-        print(f"Error: Launcher '{cmd[0]}' not found.", file=sys.stderr)
+        print(f"Error: Launcher '{launcher_str}' not found.", file=sys.stderr)
         print("Please install Claude Code or Claude-Code-Router.", file=sys.stderr)
         sys.exit(1)

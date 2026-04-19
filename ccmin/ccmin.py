@@ -54,43 +54,94 @@ def swap_settings(settings_path: Path, target_mode: str) -> None:
     atomic_write(settings_path, json.dumps(current, indent=2))
 
 
+def cmd_repair(args):
+    """Repair corrupt symlink."""
+    import os, stat
+    symlink_path = Path("/usr/local/bin/ccmin")
+
+    # Find real script location from config or __file__
+    real_script = None
+    if CONFIG_PATH.exists():
+        try:
+            config = load_config()
+            # config does not store script path, derive from project_path
+        except Exception:
+            pass
+    # Fallback: use __file__ (works when called via python3 ccmin.py --repair)
+    real_script = Path(os.path.realpath(os.path.abspath(__file__)))
+
+    if not real_script.exists():
+        print(f"Error: Cannot locate ccmin script at {real_script}")
+        print("Run: python3 /path/to/ccmin/ccmin.py --repair")
+        return
+
+    try:
+        if symlink_path.is_symlink() or symlink_path.exists():
+            symlink_path.unlink()
+            print("✓ Removed old/corrupt symlink")
+
+        symlink_path.symlink_to(real_script)
+        real_script.chmod(real_script.stat().st_mode | stat.S_IEXEC)
+        print(f"✓ Symlink repaired: {symlink_path} → {real_script}")
+    except PermissionError:
+        print("⚠ Permission denied. Try: sudo python3 ccmin/ccmin.py --repair")
+    except Exception as e:
+        print(f"Error: {e}")
+
+
 def cmd_init(args):
     """Initialize ccmin configuration."""
     print("🚀 Initializing ccmin...")
 
-    # Detect launcher
+    # Auto-fix corrupt symlink before doing anything else
+    import os
+    symlink_path = Path("/usr/local/bin/ccmin")
+    if symlink_path.is_symlink() and not symlink_path.exists():
+        try:
+            symlink_path.unlink()
+            print("⚠ Removed corrupt symlink at /usr/local/bin/ccmin")
+        except Exception as e:
+            print(f"⚠ Could not remove corrupt symlink: {e}")
+
+    # Guard: already initialized
+    if CONFIG_PATH.exists():
+        confirm = input("ccmin is already initialized. Reinitialize? [y/n]: ").strip().lower()
+        if confirm != "y":
+            print("Cancelled.")
+            return
+
+    # Launcher selection
     try:
-        launcher, all_found = detect_launcher()
-        if len(all_found) > 1:
-            print(f"Multiple launchers found: {', '.join(all_found)}")
-            choice = input(f"Which launcher to use? [{launcher}]: ").strip()
-            if choice and choice in all_found:
-                launcher = choice
-    except FileNotFoundError as e:
-        print(f"Error: {e}")
-        sys.exit(1)
+        detected_launcher, _ = detect_launcher()
+    except FileNotFoundError:
+        detected_launcher = None
 
-    # Detect scope
+    print("\nLauncher:")
+    print("  [1] claude (default - Claude Code official)")
+    print("  [2] Custom launcher")
+    launcher_choice = input("Choose [1]: ").strip() or "1"
+
+    if launcher_choice == "2":
+        custom = input("Launcher name: ").strip()
+        launcher = custom if custom else "claude"
+    else:
+        launcher = "claude"
+
+    # Scope selection
     cwd = os.getcwd()
-    scope = detect_scope(cwd)
+    print("\nScope:")
+    print("  [1] local  - project only")
+    print("  [2] global - user-wide")
+    scope_choice = input("Choose [1]: ").strip() or "1"
+    scope = "global" if scope_choice == "2" else "local"
 
-    # Interactive wizard
-    print(f"\nLauncher: {launcher}")
-    print(f"Scope: {scope} ({'local project' if scope == 'local' else 'global user'})")
-    print(f"Project path: {cwd}")
-
-    # Confirm settings
-    launcher_input = input(f"Launcher [{launcher}]: ").strip()
-    if launcher_input:
-        launcher = launcher_input
-
-    scope_input = input(f"Scope [{scope}] (local/global): ").strip()
-    if scope_input in ['local', 'global']:
-        scope = scope_input
-
-    project_input = input(f"Project path [{cwd}]: ").strip()
-    if project_input:
-        cwd = project_input
+    # Project path
+    print(f"\nProject path: {cwd}")
+    path_confirm = input("Use this path? [y/n]: ").strip().lower()
+    if path_confirm == "n":
+        project_input = input("Enter project path: ").strip()
+        if project_input:
+            cwd = project_input
 
     # Choose install method
     print("\nInstall method:")
@@ -165,15 +216,18 @@ def cmd_init(args):
 def _install_symlink():
     """Install ccmin via symlink."""
     import stat
-    ccmin_script = Path(__file__).absolute()
+    import os
+    # Use __file__ directly via os.path to avoid resolve() looping on corrupt symlinks
+    ccmin_script = Path(os.path.realpath(os.path.abspath(__file__)))
     symlink_path = Path("/usr/local/bin/ccmin")
 
     try:
-        if symlink_path.exists() or symlink_path.is_symlink():
+        # Always remove first — handles corrupt/loop symlinks safely
+        if symlink_path.is_symlink() or symlink_path.exists():
             symlink_path.unlink()
 
         symlink_path.symlink_to(ccmin_script)
-        # Make executable
+        # chmod the real file, never the symlink
         ccmin_script.chmod(ccmin_script.stat().st_mode | stat.S_IEXEC)
         print(f"✓ Symlink created: {symlink_path} → {ccmin_script}")
     except PermissionError:
@@ -510,6 +564,7 @@ Examples:
     )
 
     parser.add_argument("--init", action="store_true", help="Initialize ccmin")
+    parser.add_argument("--repair", action="store_true", help="Repair corrupt symlink")
     parser.add_argument("--full", action="store_true", help="Launch in full mode")
     parser.add_argument("--swap", action="store_true", help="Swap between modes")
     parser.add_argument("--backup", action="store_true", help="Create backup")
@@ -522,7 +577,9 @@ Examples:
     args = parser.parse_args()
 
     # Route to appropriate command
-    if args.init:
+    if args.repair:
+        cmd_repair(args)
+    elif args.init:
         cmd_init(args)
     elif args.full:
         cmd_full(args)
