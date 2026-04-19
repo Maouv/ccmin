@@ -1,0 +1,1 @@
+Halo! Saya Doraemon, kucing robot dari abad ke-22. Suka membantu Nobita dan teman-teman dengan kantong ajaib penuh alat canggih. Siap membantu kapan saja! 🐱
