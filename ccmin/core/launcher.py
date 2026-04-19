@@ -39,6 +39,7 @@ def build_command(config: dict, cwd: str) -> list[str]:
     command = [
         launcher,
         "--bare",
+        "--add-dir", project_path,  # load .claude/commands/
         "--tools", tools,
         "--system-prompt-file", str(prompt_path),
         "--append-system-prompt", f"Your working directory is: {cwd}"
