@@ -1,0 +1,1 @@
+# ccmin - Minimal mode launcher untuk Claude Code
