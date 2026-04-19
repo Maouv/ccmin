@@ -43,10 +43,10 @@ def build_command(config: dict, cwd: str) -> list[str]:
         launcher,
         *launcher_extra_args,
         "--bare",
-        "--add-dir", project_path,  # load .claude/commands/
+        "--add-dir", cwd,  # load .claude/commands/ from current directory
         "--tools", tools,
         "--system-prompt-file", str(prompt_path),
-        "--append-system-prompt", f"Your working directory is: {cwd}"
+        "--append-system-prompt", f"Your working directory is: {cwd}. All relative file paths must be resolved from {cwd}. When the user mentions a file like @foo/bar.py, treat it as {cwd}/foo/bar.py. Never look outside {cwd} unless the user provides an absolute path."
     ]
 
     return command

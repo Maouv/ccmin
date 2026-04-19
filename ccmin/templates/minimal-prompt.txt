@@ -14,6 +14,7 @@ Be extra concise. Lead with action. NO preamble. NO reasoning.
   Pass commit message via heredoc format
 
 # Rules
+- DONT CALL TOOLS THAT NOT ON THE LIST AVAILABLE
 - STRICT: NO MCP TOOLS, NO HOOKS, NO TASK_CREATE.
 - Only work with files/paths explicitly mentioned by the user.
 - If you need to see a file, call Read immediately.

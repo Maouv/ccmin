@@ -11,16 +11,19 @@ import shutil
 import sys
 from pathlib import Path
 
-# Add current directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
+# Resolve real script location — handles symlinks correctly
+_SCRIPT_DIR = Path(os.path.realpath(os.path.abspath(__file__))).parent
+
+# Add real directory to path for imports
+sys.path.insert(0, str(_SCRIPT_DIR))
 
 from core.config import load_config, save_config, get_settings_path, CCMIN_DIR, CONFIG_PATH
 from core.detector import detect_launcher, detect_scope, detect_claude_version, detect_mode
 from core.backup import backup, list_backups, restore, BACKUPS_DIR
 from core.launcher import launch, build_command
 
-# Import templates directory
-TEMPLATES_DIR = Path(__file__).parent / "templates"
+# Templates directory relative to real script location
+TEMPLATES_DIR = _SCRIPT_DIR / "templates"
 
 
 def atomic_write(path: Path, content: str) -> None:
@@ -143,6 +146,25 @@ def cmd_init(args):
         if project_input:
             cwd = project_input
 
+    # Mode selection
+    print("\nMode:")
+    print("  [1] minimal  - Read, Write, Edit, MultiEdit (no git)")
+    print("  [2] standard - Read, Write, Edit, MultiEdit, Bash(git *)")
+    print("  [3] custom   - define your own tools")
+    mode_choice = input("Choose [1]: ").strip() or "1"
+
+    if mode_choice == "3":
+        print("Enter tools separated by comma (e.g. Read,Write,Bash(git *)):")
+        custom_tools = input("> ").strip()
+        selected_mode = "custom"
+        custom_allow = [t.strip() for t in custom_tools.split(",") if t.strip()]
+    elif mode_choice == "2":
+        selected_mode = "standard"
+        custom_allow = None
+    else:
+        selected_mode = "minimal"
+        custom_allow = None
+
     # Choose install method
     print("\nInstall method:")
     print("  [1] Symlink /usr/local/bin/ccmin")
@@ -193,7 +215,7 @@ def cmd_init(args):
         )
         print(f"✓ Created /add command: {add_cmd}")
 
-    # Backup existing settings if they exist
+    # Backup existing settings if they exist, then write selected mode template
     settings_path = get_settings_path(scope, cwd)
     if settings_path.exists():
         try:
@@ -201,6 +223,22 @@ def cmd_init(args):
             print(f"✓ Existing settings backed up to {backup_path}")
         except Exception as e:
             print(f"⚠ Backup failed: {e}")
+
+    # Write settings based on selected mode
+    if selected_mode == "custom":
+        template = json.loads((TEMPLATES_DIR / "settings.min.json").read_text(encoding="utf-8"))
+        template["permissions"]["allow"] = custom_allow
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write(settings_path, json.dumps(template, indent=2))
+    elif selected_mode == "standard":
+        src = TEMPLATES_DIR / "settings.std.json"
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        settings_path.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+    else:
+        src = TEMPLATES_DIR / "settings.min.json"
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        settings_path.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+    print(f"✓ Settings written ({selected_mode}): {settings_path}")
 
     # Install method
     if install_method == "symlink":
