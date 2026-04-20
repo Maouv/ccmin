@@ -17,7 +17,7 @@ _SCRIPT_DIR = Path(os.path.realpath(os.path.abspath(__file__))).parent
 # Add real directory to path for imports
 sys.path.insert(0, str(_SCRIPT_DIR))
 
-from core.config import load_config, save_config, get_settings_path, CCMIN_DIR, CONFIG_PATH
+from core.config import load_config, save_config, get_settings_path, install_tools, CCMIN_DIR, CONFIG_PATH
 from core.detector import detect_launcher, detect_scope, detect_claude_version, detect_mode
 from core.backup import backup, list_backups, restore, BACKUPS_DIR
 from core.launcher import launch, build_command
@@ -190,15 +190,50 @@ def cmd_init(args):
         "3": "skip"
     }.get(install_choice, "symlink")
 
+    # Fast tools config
+    print("\nFast Tools (fast_read / fast_edit / fast_multi_edit):")
+    print("  Token-saving replacements for built-in Read/Edit.")
+    print("  Uses udiff patches + session hash tracking.")
+    fast_tools_choice = input("Enable fast tools? [y/n] (default n): ").strip().lower()
+    fast_tools_enabled = fast_tools_choice == "y"
+
+    sr_fallback = True
+    if fast_tools_enabled:
+        sr_input = input("Enable search-replace fallback if udiff fails? [y/n] (default y): ").strip().lower()
+        sr_fallback = sr_input != "n"
+
+    # Repo map config
+    print("\nRepo Map (inject project structure into system prompt):")
+    print("  Saves tokens by giving Claude file structure upfront.")
+    print("  Tradeoff: uses tokens at session start (default cap: 1024).")
+    repo_map_choice = input("Enable repo map? [y/n] (default n): ").strip().lower()
+    repo_map_enabled = repo_map_choice == "y"
+
+    repo_map_max_tokens = 1024
+    if repo_map_enabled:
+        mt_input = input("Max tokens for repo map? [default 1024]: ").strip()
+        if mt_input.isdigit():
+            repo_map_max_tokens = int(mt_input)
+
     # Create config
+    prompt_file_name = "minimal-prompt-fast.txt" if fast_tools_enabled else "minimal-prompt.txt"
     config = {
         "launcher": launcher,
         "scope": scope,
         "project_path": cwd,
-        "prompt_file": str(CCMIN_DIR / "minimal-prompt.txt"),
+        "prompt_file": str(CCMIN_DIR / prompt_file_name),
         "backup_limit": 10,
         "last_verified_claude_version": detect_claude_version(launcher),
-        "install_method": install_method
+        "install_method": install_method,
+        "repo_map": {
+            "enabled": repo_map_enabled,
+            "max_tokens": repo_map_max_tokens,
+            "exclude": []
+        },
+        "fast_tools": {
+            "enabled": fast_tools_enabled,
+            "sr_fallback": sr_fallback
+        }
     }
 
     # Save config
@@ -208,11 +243,19 @@ def cmd_init(args):
     # Copy templates
     CCMIN_DIR.mkdir(parents=True, exist_ok=True)
 
-    prompt_source = TEMPLATES_DIR / "minimal-prompt.txt"
+    prompt_source_name = "minimal-prompt-fast.txt" if fast_tools_enabled else "minimal-prompt.txt"
+    prompt_source = TEMPLATES_DIR / prompt_source_name
     prompt_dest = CCMIN_DIR / "minimal-prompt.txt"
     if prompt_source.exists():
         prompt_dest.write_text(prompt_source.read_text(encoding='utf-8'), encoding='utf-8')
-        print(f"✓ Prompt file copied to {prompt_dest}")
+        print(f"✓ Prompt file copied to {prompt_dest} ({prompt_source_name})")
+
+    # Install custom tools ke ~/.ccmin/tools/ (hanya kalau fast_tools enabled)
+    if fast_tools_enabled:
+        tool_results = install_tools(_SCRIPT_DIR)
+        if tool_results:
+            for tool_name, status in tool_results:
+                print(f"✓ Tool {tool_name}: {status}")
 
     # Generate .claude/commands/add.md
     commands_dir = Path(cwd) / ".claude" / "commands"
@@ -243,13 +286,16 @@ def cmd_init(args):
         template["permissions"]["allow"] = custom_allow
         atomic_write(settings_path, json.dumps(template, indent=2))
     elif selected_mode == "standard":
-        src = TEMPLATES_DIR / "settings.std.json"
+        src_name = "settings.std-fast.json" if fast_tools_enabled else "settings.std.json"
+        src = TEMPLATES_DIR / src_name
         settings_path.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
     elif selected_mode == "minimal":
-        src = TEMPLATES_DIR / "settings.min.json"
+        src_name = "settings.min-fast.json" if fast_tools_enabled else "settings.min.json"
+        src = TEMPLATES_DIR / src_name
         settings_path.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
     else:  # very-strict
-        src = TEMPLATES_DIR / "settings.vstrict.json"
+        src_name = "settings.vstrict-fast.json" if fast_tools_enabled else "settings.vstrict.json"
+        src = TEMPLATES_DIR / src_name
         settings_path.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
     print(f"✓ Settings written ({selected_mode}): {settings_path}")
 

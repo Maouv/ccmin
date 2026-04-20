@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Write",
+      "MultiEdit",
+      "Bash(git *)",
+      "Bash(python3 ~/.ccmin/tools/fast_read.py *)",
+      "Bash(python3 ~/.ccmin/tools/fast_edit.py *)",
+      "Bash(python3 ~/.ccmin/tools/fast_multi_edit.py *)"
+    ],
+    "deny": [
+      "Glob",
+      "Grep",
+      "LS",
+      "Bash(find *)",
+      "Bash(cat *)",
+      "Bash(ls *)",
+      "Bash(rm *)",
+      "Bash(rm -rf *)",
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(node *)",
+      "Bash(npm *)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read",
+      "Edit"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "input=$(cat); echo \"$input\" | jq -e '.tool_input.run_in_background == true' > /dev/null 2>&1 && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Background execution is disabled\"}}' || echo '{}'",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "input=$(cat); file_path=$(echo \"$input\" | jq -r '.tool_input.file_path // \"\"'); if [ -n \"$file_path\" ] && [ -n \"$CCMIN_CWD\" ] && [[ \"$file_path\" != \"$CCMIN_CWD\"* ]]; then echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"File outside working directory. Only files under '$CCMIN_CWD' are allowed.\"}}'; else echo '{}'; fi",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

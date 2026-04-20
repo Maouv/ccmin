@@ -18,20 +18,44 @@ def build_command(config: dict, cwd: str) -> list[str]:
     launcher_parts = launcher_str.split()  # handle multi-word launchers like 'ccr code'
     launcher = launcher_parts[0]
     launcher_extra_args = launcher_parts[1:]
-    prompt_file = config.get("prompt_file", "~/.ccmin/minimal-prompt.txt")
     scope = config.get("scope", "local")
     project_path = config.get("project_path", cwd)
+    fast_tools_enabled = config.get("fast_tools", {}).get("enabled", False)
 
-    # Expand user path
+    # Pilih prompt file berdasarkan fast_tools config
+    prompt_file = config.get("prompt_file", "~/.ccmin/minimal-prompt.txt")
     prompt_path = Path(prompt_file).expanduser()
+
+    # Fallback: kalau prompt_file tidak ada, cari yang sesuai mode
     if not prompt_path.exists():
-        print(f"Warning: Prompt file not found at {prompt_path}", file=sys.stderr)
+        ccmin_dir = Path.home() / ".ccmin"
+        if fast_tools_enabled:
+            fallback = ccmin_dir / "minimal-prompt-fast.txt"
+        else:
+            fallback = ccmin_dir / "minimal-prompt.txt"
+        if fallback.exists():
+            prompt_path = fallback
+        else:
+            print(f"Warning: Prompt file not found at {prompt_path}", file=sys.stderr)
 
     # Inject CWD into prompt dynamically, write to temp file
     import tempfile
     prompt_text = prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else ""
     prompt_text = prompt_text.replace("{cwd}", cwd)
     prompt_text += f"\n\n# Session Context\nWorking directory: {cwd}\nAll file paths are relative to {cwd}. Never access files outside {cwd} unless user provides absolute path."
+
+    # Inject repo map jika enabled
+    try:
+        import sys as _sys
+        _ccmin_tools = Path.home() / ".ccmin" / "tools"
+        if str(_ccmin_tools) not in _sys.path:
+            _sys.path.insert(0, str(_ccmin_tools))
+        from repo_map import generate_map
+        repo_map_str = generate_map(cwd)
+        if repo_map_str:
+            prompt_text += f"\n\n{repo_map_str}"
+    except Exception:
+        pass  # repo_map gagal tidak boleh block launch
 
     tmp_prompt = Path(tempfile.mktemp(suffix=".txt", prefix="ccmin-prompt-"))
     tmp_prompt.write_text(prompt_text, encoding="utf-8")
@@ -148,4 +172,3 @@ def launch(config: dict, full_mode: bool = False) -> None:
         print(f"Error: Launcher '{launcher_str}' not found.", file=sys.stderr)
         print("Please install Claude Code or Claude-Code-Router.", file=sys.stderr)
         sys.exit(1)
-

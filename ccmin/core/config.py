@@ -2,10 +2,12 @@
 """Config management for ccmin."""
 
 import json
+import shutil
 from pathlib import Path
 
 CCMIN_DIR = Path("~/.ccmin").expanduser()
 CONFIG_PATH = CCMIN_DIR / "config.json"
+TOOLS_DIR = CCMIN_DIR / "tools"
 
 
 def load_config() -> dict:
@@ -37,3 +39,28 @@ def get_settings_path(scope: str, project_path: str) -> Path:
         return Path.home() / ".claude" / "settings.json"
     else:
         raise ValueError(f"Invalid scope: {scope}. Must be 'local' or 'global'.")
+
+
+def install_tools(script_dir: Path) -> list:
+    """
+    Copy tools dari repo ke ~/.ccmin/tools/.
+    Return list of (tool_name, status) untuk reporting.
+    """
+    src_tools = script_dir / "tools"
+    if not src_tools.exists():
+        return []
+
+    TOOLS_DIR.mkdir(parents=True, exist_ok=True)
+    results = []
+
+    for tool_file in ["fast_read.py", "fast_edit.py", "fast_multi_edit.py", "repo_map.py"]:
+        src = src_tools / tool_file
+        dst = TOOLS_DIR / tool_file
+        if src.exists():
+            shutil.copy2(src, dst)
+            dst.chmod(0o755)
+            results.append((tool_file, "installed"))
+        else:
+            results.append((tool_file, "not found in repo"))
+
+    return results
