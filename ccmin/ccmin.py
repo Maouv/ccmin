@@ -127,10 +127,11 @@ def cmd_init(args):
     if launcher_choice == "2":
         while True:
             custom = input("Launcher name: ").strip() or "claude"
-            if shutil.which(custom):
+            binary = custom.split()[0]  # handle multi-word like 'ccr code'
+            if shutil.which(binary):
                 launcher = custom
                 break
-            print(f"⚠ '{custom}' not found in PATH. Try again.")
+            print(f"⚠ '{binary}' not found in PATH. Try again.")
     else:
         launcher = "claude"
 
@@ -152,25 +153,28 @@ def cmd_init(args):
 
     # Mode selection
     print("\nMode:")
-    print("  [1] minimal  - Read, Write, Edit, MultiEdit (no git)")
-    print("  [2] standard - Read, Write, Edit, MultiEdit, Bash(git *)")
-    print("  [3] custom   - define your own tools")
+    print("  [1] very-strict - Read requires approval, Write, Edit, MultiEdit (no git)")
+    print("  [2] minimal     - Read, Write, Edit, MultiEdit (no git)")
+    print("  [3] standard    - Read, Write, Edit, MultiEdit, Bash(git *)")
+    print("  [4] custom      - define your own tools")
     mode_choice = input("Choose [1]: ").strip() or "1"
 
-    if mode_choice == "3":
+    if mode_choice == "4":
         print("Enter tools separated by comma (e.g. Read,Write,Bash(git *)):")
         custom_tools = input("> ").strip()
         selected_mode = "custom"
         custom_allow = [t.strip() for t in custom_tools.split(",") if t.strip()]
-        # Fix #5: Warn about suspicious tool formats
         for t in custom_allow:
             if t == t.lower() and "(" not in t:
                 print(f"⚠ '{t}' looks lowercase and has no pattern — may not work as expected")
-    elif mode_choice == "2":
+    elif mode_choice == "3":
         selected_mode = "standard"
         custom_allow = None
-    else:
+    elif mode_choice == "2":
         selected_mode = "minimal"
+        custom_allow = None
+    else:
+        selected_mode = "very-strict"
         custom_allow = None
 
     # Choose install method
@@ -233,18 +237,19 @@ def cmd_init(args):
             print(f"⚠ Backup failed: {e}")
 
     # Write settings based on selected mode
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
     if selected_mode == "custom":
         template = json.loads((TEMPLATES_DIR / "settings.min.json").read_text(encoding="utf-8"))
         template["permissions"]["allow"] = custom_allow
-        settings_path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write(settings_path, json.dumps(template, indent=2))
     elif selected_mode == "standard":
         src = TEMPLATES_DIR / "settings.std.json"
-        settings_path.parent.mkdir(parents=True, exist_ok=True)
         settings_path.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
-    else:
+    elif selected_mode == "minimal":
         src = TEMPLATES_DIR / "settings.min.json"
-        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        settings_path.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+    else:  # very-strict
+        src = TEMPLATES_DIR / "settings.vstrict.json"
         settings_path.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
     print(f"✓ Settings written ({selected_mode}): {settings_path}")
 

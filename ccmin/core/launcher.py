@@ -36,14 +36,20 @@ def build_command(config: dict, cwd: str) -> list[str]:
     tmp_prompt = Path(tempfile.mktemp(suffix=".txt", prefix="ccmin-prompt-"))
     tmp_prompt.write_text(prompt_text, encoding="utf-8")
 
-    # Baca allow list dari settings aktif
+    # Baca allow list dan detect mode dari settings aktif
     tools = "Read,Write,Edit,MultiEdit,Bash(git *)"  # fallback
+    is_very_strict = False
     settings_path = get_settings_path(scope, project_path)
     if settings_path.exists():
         try:
             settings = json.loads(settings_path.read_text())
             allow = settings.get("permissions", {}).get("allow", [])
-            if allow:
+            ask = settings.get("permissions", {}).get("ask", [])
+            # very-strict: Read is in ask, not allow
+            if "Read" in ask and "Read" not in allow:
+                is_very_strict = True
+                tools = ",".join([t for t in allow if t])  # exclude Read from --tools
+            elif allow:
                 tools = ",".join(allow)
         except json.JSONDecodeError:
             pass
@@ -104,6 +110,9 @@ def launch(config: dict, full_mode: bool = False) -> None:
 
     # Disable auto-memory to prevent token waste and unsolicited file writes
     os.environ["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] = "1"
+
+    # Expose CWD for PreToolUse hook to enforce file access boundaries
+    os.environ["CCMIN_CWD"] = cwd
 
     # Replace current process
     try:
