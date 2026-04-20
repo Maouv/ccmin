@@ -125,8 +125,12 @@ def cmd_init(args):
     launcher_choice = input("Choose [1]: ").strip() or "1"
 
     if launcher_choice == "2":
-        custom = input("Launcher name: ").strip()
-        launcher = custom if custom else "claude"
+        while True:
+            custom = input("Launcher name: ").strip() or "claude"
+            if shutil.which(custom):
+                launcher = custom
+                break
+            print(f"⚠ '{custom}' not found in PATH. Try again.")
     else:
         launcher = "claude"
 
@@ -158,6 +162,10 @@ def cmd_init(args):
         custom_tools = input("> ").strip()
         selected_mode = "custom"
         custom_allow = [t.strip() for t in custom_tools.split(",") if t.strip()]
+        # Fix #5: Warn about suspicious tool formats
+        for t in custom_allow:
+            if t == t.lower() and "(" not in t:
+                print(f"⚠ '{t}' looks lowercase and has no pattern — may not work as expected")
     elif mode_choice == "2":
         selected_mode = "standard"
         custom_allow = None
@@ -295,11 +303,28 @@ def _install_bashrc():
 
 def cmd_launch(args):
     """Launch Claude in minimal mode."""
+    # Fix #1: Auto-detect corrupt symlink on launch, not just --init
+    symlink_path = Path("/usr/local/bin/ccmin")
+    if symlink_path.is_symlink() and not symlink_path.exists():
+        print("⚠ Corrupt symlink detected at /usr/local/bin/ccmin")
+        print("Run: python3 ccmin/ccmin.py --repair")
+        sys.exit(1)
+
     try:
         config = load_config()
     except FileNotFoundError:
         print("Error: ccmin not initialized. Run 'ccmin --init' first.")
         sys.exit(1)
+
+    # Fix #4: Warn if prompt file is outdated
+    prompt_dest = CCMIN_DIR / "minimal-prompt.txt"
+    prompt_source = TEMPLATES_DIR / "minimal-prompt.txt"
+    if prompt_dest.exists() and prompt_source.exists():
+        import hashlib
+        dest_hash = hashlib.sha256(prompt_dest.read_bytes()).hexdigest()
+        src_hash = hashlib.sha256(prompt_source.read_bytes()).hexdigest()
+        if dest_hash != src_hash:
+            print("⚠ Prompt outdated, run ccmin --init to update")
 
     # Auto-create .claude/ dan copy prompt jika belum ada
     cwd = os.getcwd()

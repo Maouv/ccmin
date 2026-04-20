@@ -53,6 +53,8 @@ def _prune_backups(scope: str, backup_limit: int) -> None:
     """Remove oldest backups if count exceeds limit."""
     backups = list_backups(scope)
     if len(backups) > backup_limit:
+        removed = len(backups) - backup_limit
+        print(f"⚠ Oldest backup will be removed ({removed} file(s), keeping {backup_limit})")
         # Remove oldest files (already sorted by date desc)
         for old_backup in backups[backup_limit:]:
             old_backup.unlink()
