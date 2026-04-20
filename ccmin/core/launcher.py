@@ -37,7 +37,8 @@ def build_command(config: dict, cwd: str) -> list[str]:
     tmp_prompt.write_text(prompt_text, encoding="utf-8")
 
     # Baca allow list dan detect mode dari settings aktif
-    tools = "Read,Write,Edit,MultiEdit,Bash(git *)"  # fallback
+    tools = "Read,Write,Edit,MultiEdit,Bash"  # fallback
+    command_allowed = None
     is_very_strict = False
     settings_path = get_settings_path(scope, project_path)
     if settings_path.exists():
@@ -48,10 +49,27 @@ def build_command(config: dict, cwd: str) -> list[str]:
             # very-strict: Read is in ask, not allow
             if "Read" in ask and "Read" not in allow:
                 is_very_strict = True
-                # Keep Read in --tools so model knows it exists, controlled via --allowedTools
-                tools = ",".join([t for t in allow if t]) + ",Read"
+                base_tools = []
+                for t in allow:
+                    base = t.split("(")[0] if "(" in t else t
+                    if base and base not in base_tools:
+                        base_tools.append(base)
+                if "Read" not in base_tools:
+                    base_tools.append("Read")
+                tools = ",".join(base_tools)
             elif allow:
-                tools = ",".join(allow)
+                # --tools: base tool names only (no specifier)
+                # --allowedTools: full specifier untuk restrict
+                base_tools = []
+                allowed_tools = []
+                for t in allow:
+                    base = t.split("(")[0] if "(" in t else t
+                    if base and base not in base_tools:
+                        base_tools.append(base)
+                    allowed_tools.append(t)
+                tools = ",".join(base_tools)
+                # Pass full specifiers via --allowedTools
+                command_allowed = ",".join(allowed_tools)
         except json.JSONDecodeError:
             pass
 
@@ -62,6 +80,9 @@ def build_command(config: dict, cwd: str) -> list[str]:
         "--tools", tools,
         "--system-prompt-file", str(tmp_prompt),
     ]
+
+    if command_allowed:
+        command += ["--allowedTools", command_allowed]
 
     # very-strict: Read requires approval — pass allowedTools without Read
     if is_very_strict:
@@ -127,3 +148,4 @@ def launch(config: dict, full_mode: bool = False) -> None:
         print(f"Error: Launcher '{launcher_str}' not found.", file=sys.stderr)
         print("Please install Claude Code or Claude-Code-Router.", file=sys.stderr)
         sys.exit(1)
+
