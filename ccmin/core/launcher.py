@@ -27,6 +27,15 @@ def build_command(config: dict, cwd: str) -> list[str]:
     if not prompt_path.exists():
         print(f"Warning: Prompt file not found at {prompt_path}", file=sys.stderr)
 
+    # Inject CWD into prompt dynamically, write to temp file
+    import tempfile
+    prompt_text = prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else ""
+    prompt_text = prompt_text.replace("{cwd}", cwd)
+    prompt_text += f"\n\n# Session Context\nWorking directory: {cwd}\nAll file paths are relative to {cwd}. Never access files outside {cwd} unless user provides absolute path."
+
+    tmp_prompt = Path(tempfile.mktemp(suffix=".txt", prefix="ccmin-prompt-"))
+    tmp_prompt.write_text(prompt_text, encoding="utf-8")
+
     # Baca allow list dari settings aktif
     tools = "Read,Write,Edit,MultiEdit,Bash(git *)"  # fallback
     settings_path = get_settings_path(scope, project_path)
@@ -43,10 +52,8 @@ def build_command(config: dict, cwd: str) -> list[str]:
         launcher,
         *launcher_extra_args,
         "--bare",
-        "--add-dir", cwd,  # load .claude/commands/ from current directory
         "--tools", tools,
-        "--system-prompt-file", str(prompt_path),
-        "--append-system-prompt", f"Your working directory is: {cwd}. All relative file paths must be resolved from {cwd}. When the user mentions a file like @foo/bar.py, treat it as {cwd}/foo/bar.py. Never look outside {cwd} unless the user provides an absolute path."
+        "--system-prompt-file", str(tmp_prompt),
     ]
 
     return command
