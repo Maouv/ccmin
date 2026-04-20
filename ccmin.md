@@ -1,1 +1,1 @@
-ccmin jaya jaya terus
+i luv freya
